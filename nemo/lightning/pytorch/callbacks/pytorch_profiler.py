@@ -94,8 +94,6 @@ class PytorchProfilerCallback(Callback, IOMixin):
         if collect_et:
             self.chakra_host_trace_path.mkdir(parents=True, exist_ok=True)
             self.trace_observer = torch.profiler.ExecutionTraceObserver()
-            trace_file = self.chakra_host_trace_path / f"rank-{get_rank()}.json.gz"
-            self.trace_observer.register_callback(str(trace_file))
 
         base_kwargs = {
             "activities": [
@@ -126,8 +124,16 @@ class PytorchProfilerCallback(Callback, IOMixin):
             f" - Extra profiler kwargs: {profiler_kwargs or {}}"
         )
 
+
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx: int) -> None:
         """Chakra trace collection ends."""
+        if trainer.global_step == (self.start_step - 1):
+            logging.info(f"====== Start Chakra profiling at global_step {trainer.global_step + 1} ======")
+
+            # get_rank() only returns valid path after torch distributed is initialized
+            trace_file = self.chakra_host_trace_path / f"rank-{get_rank()}.json"
+            self.trace_observer.register_callback(str(trace_file))
+
         # Step the profiler after each training batch
         if self.profiler:
             self.profiler.step()
